@@ -25,34 +25,43 @@ local function run_maven_command(cmd, callback)
 end
 
 -- Función para recargar dependencias usando mvn dependency:resolve
-function M.reload_dependencies()
+function M.reload_dependencies(callback)
 	run_maven_command({ "mvn", "dependency:resolve" }, function(success, output)
 		if success then
 			notify_result("Dependencies reloaded successfully.", vim.log.levels.INFO)
 		else
 			notify_result("Failed to reload dependencies:\n" .. output, vim.log.levels.ERROR)
 		end
+		if callback then
+			callback(success)
+		end
 	end)
 end
 
 -- Función para validar el pom.xml con mvn validate
-function M.validate_pom()
+function M.validate_pom(callback)
 	run_maven_command({ "mvn", "validate" }, function(success, output)
 		if success then
 			notify_result("pom.xml validated successfully.", vim.log.levels.INFO)
 		else
 			notify_result("Validation failed:\n" .. output, vim.log.levels.ERROR)
 		end
+		if callback then
+			callback(success)
+		end
 	end)
 end
 
 -- Función para verificar el proyecto con mvn verify
-function M.verify_pom()
+function M.verify_pom(callback)
 	run_maven_command({ "mvn", "verify" }, function(success, output)
 		if success then
 			notify_result("pom.xml verification successful.", vim.log.levels.INFO)
 		else
 			notify_result("Verification failed:\n" .. output, vim.log.levels.ERROR)
+		end
+		if callback then
+			callback(success)
 		end
 	end)
 end
@@ -80,10 +89,16 @@ function M.set_autocmds()
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		pattern = "pom.xml",
 		callback = function()
-			-- Ejecuta las tres funciones de manera asíncrona en secuencia
-			M.reload_dependencies()
-			M.validate_pom()
-			M.verify_pom()
+			-- Ejecuta las tres funciones de manera secuencial
+			M.reload_dependencies(function(success)
+				if success then
+					M.validate_pom(function(validate_success)
+						if validate_success then
+							M.verify_pom(function(verify_success) end)
+						end
+					end)
+				end
+			end)
 		end,
 		desc = "Recarga dependencias, valida y verifica el archivo pom.xml tras guardarlo.",
 	})
